@@ -37,8 +37,8 @@ __C.NETWORK = edict()
 __C.NETWORK.EMBED_DIM = 768
 __C.NETWORK.COMBINED_DIM = 1024
 __C.NETWORK.OUTPUT_SHAPE = (32, 32, 32)
-__C.NETWORK.ATTENTION_HEADS = 8  # Add this line to define the number of attention heads
-__C.NETWORK.DROPOUT_RATE = 0.1  # You might also want to define the dropout rate if it's used
+__C.NETWORK.ATTENTION_HEADS = 8  # Number of attention heads
+__C.NETWORK.DROPOUT_RATE = 0.1  # Dropout rate
 
 # Training
 __C.TRAIN = edict()
@@ -58,7 +58,7 @@ __C.TRAIN.EXPONENTIALLR = edict()
 __C.TRAIN.EXPONENTIALLR.SCHEDULE_FACTOR = 1
 # for MilestonesLR
 __C.TRAIN.MILESTONESLR = edict()
-__C.TRAIN.MILESTONESLR.LR_MILESTONES = [50, 120]
+__C.TRAIN.MILESTONESLR.LR_MILESTONES = [50, 120, 190, 200]
 __C.TRAIN.MILESTONESLR.GAMMA = .1
 __C.TRAIN.BETAS = (.9, .999)
 __C.TRAIN.SAVE_FREQ = 30  # weights will be overwritten every save_freq epoch
@@ -70,6 +70,7 @@ __C.TRAIN.TEST_AFTER_TRAIN = True
 __C.TEST = edict()
 __C.TEST.RANDOM_BG_COLOR_RANGE = [[240, 240], [240, 240], [240, 240]]
 __C.TEST.VOXEL_THRESH = [.3, .4, .5, .6]
+__C.TEST.CALCULATE_FSCORE = True
 
 # Refiner Configuration
 __C.REFINER = edict()
@@ -81,5 +82,5 @@ __C.REFINER.TCONV_USE_BIAS = False  # Whether to use bias in the transposed conv
 __C.REFINER.N_VOX = 32
 
 # Add checkpoint file path to the configuration
-__C.CHECKPOINT_FILE = '/workspace/output/checkpoints/2024-08-25T14:09:33.942981/checkpoint-epoch-027.pth'
+__C.CHECKPOINT_FILE = '/workspace/output/checkpoints/2024-08-31T16:08:10.326967/checkpoint-epoch-209.pth'
 __C.RESUME_TRAIN = True

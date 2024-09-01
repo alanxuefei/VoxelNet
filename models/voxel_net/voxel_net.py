@@ -6,9 +6,9 @@ import logging
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-class Simple3DReconstruction(nn.Module):
+class voxelNet(nn.Module):
     def __init__(self, cfg):
-        super(Simple3DReconstruction, self).__init__()
+        super(voxelNet, self).__init__()
         self.num_views = cfg.CONST.N_VIEWS_RENDERING
         self.embed_dim = cfg.NETWORK.EMBED_DIM
         self.combined_dim = cfg.NETWORK.COMBINED_DIM

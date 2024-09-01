@@ -11,9 +11,9 @@ import utils.logging
 
 from time import time
 import core.pipeline_train as pipeline
-from core.test import test_net
+from core.test import test_net, test_net_fscore
 
-from models.voxel_net.simple_3d_reconstruction import Simple3DReconstruction
+from models.voxel_net.voxel_net import voxelNet
 from models.voxel_net.refiner import Refiner
 from losses.losses import DiceLoss, CEDiceLoss, FocalLoss
 from utils.average_meter import AverageMeter
@@ -26,7 +26,7 @@ def train_net(cfg):
     train_data_loader, train_sampler, val_data_loader, val_file_num = pipeline.load_data(cfg)
 
     # Load models
-    model = Simple3DReconstruction(cfg)
+    model = voxelNet(cfg)
     refiner = Refiner(cfg)
     
     # Initialize training parameters
@@ -104,8 +104,8 @@ def train_net(cfg):
                     f"BatchTime = {batch_time.val:.3f} (s) DataTime = {data_time.val:.3f} (s) "
                     f"ModelLoss = {model_loss.item():.4f} RefinerLoss = {refiner_loss.item():.4f}"
                 )
-                print(f'LearningRate: {lr_scheduler.optimizer.param_groups[0]["lr"]:.6f}')
-                print(f'Refiner LearningRate: {refiner_lr_scheduler.optimizer.param_groups[0]["lr"]:.6f}')
+                print(f'LearningRate: {lr_scheduler.optimizer.param_groups[0]["lr"]:.10f}')
+                print(f'Refiner LearningRate: {refiner_lr_scheduler.optimizer.param_groups[0]["lr"]:.10f}')
             else:
                 utils.logging.debug(
                     f"[Epoch {epoch_idx + 1}/{cfg.TRAIN.NUM_EPOCHS}][Batch {batch_idx + 1}/{n_batches}] "
@@ -133,6 +133,7 @@ def train_net(cfg):
             best_iou = max(best_iou, iou)
             best_epoch = epoch_idx if iou > best_iou else best_epoch
             save_checkpoint(cfg, epoch_idx, best_iou, best_epoch, model, refiner)
+            test_net_fscore(cfg, epoch_idx + 1, val_data_loader, val_file_num, val_writer, model, refiner)
 
     train_writer.close()
     val_writer.close()
@@ -164,6 +165,7 @@ def save_checkpoint(cfg, epoch_idx, best_iou, best_epoch, model, refiner):
     output_dir = cfg.DIR.CHECKPOINTS
     os.makedirs(output_dir, exist_ok=True)
     file_name = f'checkpoint-epoch-{epoch_idx:03d}.pth' if epoch_idx > best_epoch else 'checkpoint-best.pth'
+    
     checkpoint = {
         'epoch_idx': epoch_idx,
         'best_iou': best_iou,
@@ -171,5 +173,6 @@ def save_checkpoint(cfg, epoch_idx, best_iou, best_epoch, model, refiner):
         'model_state_dict': model.state_dict(),
         'refiner_state_dict': refiner.state_dict(),
     }
+    
     torch.save(checkpoint, os.path.join(output_dir, file_name))
     utils.logging.info(f'Saved checkpoint to {os.path.join(output_dir, file_name)}')

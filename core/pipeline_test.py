@@ -119,3 +119,52 @@ def output(cfg, test_iou, taxonomies):
     print('\n')
 
     return mean_iou
+
+def output_fscore(cfg, test_iou, test_fscore, taxonomies):
+    mean_iou = []
+    mean_fscore = []
+    n_samples = 0
+
+    for taxonomy_id in test_iou:
+        test_iou[taxonomy_id]['iou'] = np.mean(test_iou[taxonomy_id]['iou'], axis=0)
+        test_fscore[taxonomy_id]['fscore'] = np.mean(test_fscore[taxonomy_id]['fscore'], axis=0)
+        mean_iou.append(test_iou[taxonomy_id]['iou'] * test_iou[taxonomy_id]['n_samples'])
+        mean_fscore.append(test_fscore[taxonomy_id]['fscore'] * test_fscore[taxonomy_id]['n_samples'])
+        n_samples += test_iou[taxonomy_id]['n_samples']
+
+    mean_iou = np.sum(mean_iou, axis=0) / n_samples
+    mean_fscore = np.sum(mean_fscore, axis=0) / n_samples
+
+    # Print header
+    print('\n')
+    print('============================ TEST RESULTS ============================')
+    print('Taxonomy', end='\t')
+    print('#Sample', end='\t')
+    print('Baseline', end='\t')
+    for th in cfg.TEST.VOXEL_THRESH:
+        print('t=%.2f' % th, end='\t')
+    print('F-score', end='\t')
+    print()
+    
+    # Print body
+    for taxonomy_id in test_iou:
+        print('%s' % taxonomies[taxonomy_id]['taxonomy_name'].ljust(8), end='\t')
+        print('%d' % test_iou[taxonomy_id]['n_samples'], end='\t')
+        print('N/a', end='\t\t')
+
+        for ti in test_iou[taxonomy_id]['iou']:
+            print('%.4f' % ti, end='\t')
+
+        # Print F-score for the taxonomy
+        print('%.4f' % test_fscore[taxonomy_id]['fscore'], end='\t')
+        print()
+
+    # Print mean IoU and F-score for each threshold
+    print('Overall ', end='\t\t\t\t')
+    for mi in mean_iou:
+        print('%.4f' % mi, end='\t')
+    print('%.4f' % mean_fscore, end='\t')
+    print('\n')
+
+    return mean_iou, mean_fscore
+
