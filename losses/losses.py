@@ -68,3 +68,15 @@ class CEDiceLoss(torch.nn.Module):
         ce_loss = self.cross_entropy(output, target)
         dice_loss = self.dice(output, target)
         return ce_loss + dice_loss
+    
+def get_loss_function(loss_type):
+    if loss_type == 1:
+        return torch.nn.BCELoss()
+    elif loss_type == 2:
+        return DiceLoss()
+    elif loss_type == 3:
+        return CEDiceLoss()
+    elif loss_type == 4:
+        return FocalLoss()
+    else:
+        raise ValueError(f'Loss function type {loss_type} is not supported.')

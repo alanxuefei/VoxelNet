@@ -1,5 +1,13 @@
 import torch
 
+class DummyRefiner(torch.nn.Module):
+    def __init__(self, cfg):
+        super(DummyRefiner, self).__init__()
+        self.cfg = cfg
+
+    def forward(self, x):
+        # No operation; just return the input
+        return x
 
 class Refiner(torch.nn.Module):
     def __init__(self, cfg):

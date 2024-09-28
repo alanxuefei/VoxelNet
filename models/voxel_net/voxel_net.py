@@ -42,11 +42,14 @@ class voxelNet(nn.Module):
         view_features = torch.stack(view_features, dim=1)
 
         # Apply multi-head attention
-        attn_output, _ = self.attention(view_features, view_features, view_features)
+        attn_output, attn_weights = self.attention(view_features, view_features, view_features)
+        # Log the shapes of attn_output and attn_weights
+        # logging.info(f"network attn_output shape: {attn_output.shape}")
+        # logging.info(f"network attn_weights shape: {attn_weights.shape}")
         attn_output = attn_output.reshape(batch_size, -1)
 
         # Decode to 3D output
         output_3D = self.fc_decoder(attn_output)
         output_3D = output_3D.view(-1, *self.output_shape)
         
-        return output_3D
+        return output_3D, attn_weights
