@@ -80,14 +80,13 @@ def load_checkpoint_model(cfg, model):
     # Retrieve saved training state
     init_epoch = checkpoint.get('epoch_idx', 0)
     best_iou = checkpoint.get('best_iou', -1)
-    best_epoch = checkpoint.get('best_epoch', -1)
 
     logging.info(f"Loaded model checkpoint from {checkpoint_path} "
                  f"(epoch {init_epoch}, best IoU {best_iou})")
     logging.info(f"Total parameters loaded: {len(filtered_state_dict)}")
     logging.info(f"Total parameters skipped due to mismatch: {len(mismatched_keys)}")
 
-    return init_epoch, best_iou, best_epoch
+    return init_epoch
 
 def load_checkpoint_refiner(cfg, refiner):
     checkpoint_path = cfg.CHECKPOINT_REFINER_FILE
@@ -104,14 +103,13 @@ def load_checkpoint_refiner(cfg, refiner):
     # Retrieve saved training state
     init_epoch = checkpoint['epoch_idx']
     best_iou = checkpoint['best_iou']
-    best_epoch = checkpoint['best_epoch']
 
     logging.info(f"Loaded refiner checkpoint from {checkpoint_path} (epoch {init_epoch}, best IOU {best_iou})")
     
-    return init_epoch, best_iou, best_epoch
+    return init_epoch, best_iou, init_epoch
 
 
-def load_data(cfg):
+def load_train_data(cfg):
     # Set up data augmentation
     IMG_SIZE = cfg.CONST.IMG_H, cfg.CONST.IMG_W
     CROP_SIZE = cfg.CONST.CROP_IMG_H, cfg.CONST.CROP_IMG_W
@@ -121,18 +119,10 @@ def load_data(cfg):
         utils.data_transforms.ToTensor(),
         utils.data_transforms.normalize
     ])
-    val_transforms = utils.data_transforms.Compose([
-        utils.data_transforms.CenterCrop(IMG_SIZE, CROP_SIZE),
-        utils.data_transforms.RandomBackground(cfg.TEST.RANDOM_BG_COLOR_RANGE),
-        utils.data_transforms.ToTensor(),
-        utils.data_transforms.normalize
-    ])
 
     # Set up data loader
     train_dataset, _ = utils.data_loaders.DATASET_LOADER_MAPPING[cfg.DATASET.TRAIN_DATASET](cfg).get_dataset(
         utils.data_loaders.DatasetType.TRAIN, cfg.CONST.N_VIEWS_RENDERING, train_transforms)
-    val_dataset, val_file_num = utils.data_loaders.DATASET_LOADER_MAPPING[cfg.DATASET.TEST_DATASET](cfg).get_dataset(
-        utils.data_loaders.DatasetType.VAL, cfg.CONST.N_VIEWS_RENDERING, val_transforms)
     
     train_data_loader = torch.utils.data.DataLoader(
         dataset=train_dataset,
@@ -141,14 +131,7 @@ def load_data(cfg):
         num_workers=cfg.CONST.NUM_WORKER,
         pin_memory=True)
 
-    val_data_loader = torch.utils.data.DataLoader(
-        dataset=val_dataset,
-        batch_size=1,
-        shuffle=False,
-        num_workers=cfg.CONST.NUM_WORKER,
-        pin_memory=True)
-
-    return train_data_loader, None, val_data_loader, val_file_num
+    return train_data_loader
 
 def setup_network(cfg, model):
     # Set up network
@@ -166,9 +149,9 @@ def setup_network(cfg, model):
     best_epoch = -1
 
     if cfg.RESUME_TRAIN:
-        init_epoch, best_iou, best_epoch = load_checkpoint_model(cfg, model)
+        init_epoch = load_checkpoint_model(cfg, model)
 
-    return init_epoch, best_iou, best_epoch, model, cfg
+    return init_epoch, model, cfg
 
 def setup_refiner(cfg, refiner):
     # Set up refiner network
@@ -186,8 +169,8 @@ def setup_refiner(cfg, refiner):
     best_epoch = -1
 
     if cfg.RESUME_TRAIN:
-        init_epoch, best_iou, best_epoch = load_checkpoint_refiner(cfg, refiner)
-    return init_epoch, best_iou, best_epoch, refiner, cfg
+         init_epoch = load_checkpoint_refiner(cfg, refiner)
+    return init_epoch, refiner, cfg
 
 def solver(cfg, model):
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.TRAIN.LEARNING_RATE, betas=cfg.TRAIN.BETAS)

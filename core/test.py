@@ -22,14 +22,11 @@ from losses.losses import DiceLoss, CEDiceLoss, FocalLoss
 from utils.average_meter import AverageMeter
 
 def test_net(cfg,
-             epoch_idx,
-             test_data_loader,
-             test_file_num,
              model,
              refiner):
     torch.backends.cudnn.benchmark = True
     # Load data
-    taxonomies, test_data_loader, test_file_num = pipeline.load_data(cfg, test_data_loader, test_file_num)
+    taxonomies, test_data_loader, test_file_num = pipeline.load_data(cfg)
 
     # Testing loop
     n_samples = len(test_data_loader)
@@ -70,8 +67,8 @@ def test_net(cfg,
             # Print sample loss and IoU
             if (sample_idx + 1) % 50 == 0:
                 for_tqdm.update(50)
-                for_tqdm.set_description('Test[%d/%d] Taxonomy = %s' %
-                                            (sample_idx + 1, n_samples, taxonomy_id))
+                for_tqdm.set_description('Test[%d/%d] Taxonomy = %s IoU = %.4f' % 
+                                      (sample_idx + 1, n_samples, taxonomy_id, test_iou_value))
 
             logging.debug('Test[%d/%d] Taxonomy = %s Sample = %s IoU = %s' %
                             (sample_idx + 1, n_samples, taxonomy_id, sample_name,

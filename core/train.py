@@ -66,7 +66,7 @@ def train_model(cfg, model, refiner, train_data_loader, model_optimizer, loss_fu
         batch_end_time = time.time()
 
         # Logging
-        if batch_idx == 0 or (batch_idx + 1) % cfg.TRAIN.SHOW_TRAIN_STATE == 0:
+        if batch_idx == 0 or (batch_idx + 1) % 50 == 0:
             utils.logging.info(
                 f"[Epoch {epoch_idx + 1}/{cfg.TRAIN.NUM_EPOCHS}]"
                 f"[Batch {batch_idx + 1}/{n_batches}] "
@@ -154,15 +154,17 @@ def train_net(cfg):
     torch.backends.cudnn.benchmark = True
 
     # Load data
-    train_data_loader, train_sampler, val_data_loader, val_file_num = pipeline.load_data(cfg)
+    train_data_loader = pipeline.load_train_data(cfg)
 
     # Load models
     model = voxelNet(cfg)
     refiner = Refiner(cfg)
 
     # Initialize training parameters
-    init_epoch, best_iou, best_epoch, model, cfg = pipeline.setup_network(cfg, model)
-    init_epoch, best_iou, best_epoch, refiner, cfg = pipeline.setup_refiner(cfg, refiner)
+    init_epoch, model, cfg = pipeline.setup_network(cfg, model)
+    init_epoch, refiner, cfg = pipeline.setup_refiner(cfg, refiner)
+
+    test_net(cfg, model, refiner)
 
     # Set up optimizers and loss functions
     loss_function_model = get_loss_function(cfg.TRAIN.LOSS)
@@ -178,7 +180,7 @@ def train_net(cfg):
         refiner_optimizer = None
 
     # Training loop
-    for epoch_idx in range(init_epoch, cfg.TRAIN.NUM_EPOCHS):
+    for epoch_idx in range(0, cfg.TRAIN.NUM_EPOCHS):
         epoch_start_time = time.time()
 
         if cfg.USE_REFINER:
@@ -204,7 +206,7 @@ def train_net(cfg):
         # Save weights if necessary
         if (epoch_idx % cfg.TRAIN.SAVE_FREQ == 0 or
             avg_model_loss < best_model_loss or avg_refiner_loss < best_refiner_loss):
-            iou = test_net(cfg, epoch_idx + 1, val_data_loader, val_file_num, model, refiner)
+            iou = test_net(cfg, epoch_idx + 1, None, None, model, refiner)
             pipeline.save_checkpoint(cfg, epoch_idx, iou, model, refiner, avg_model_loss, avg_refiner_loss)
 
             if cfg.TEST.RUN_FSCORE:

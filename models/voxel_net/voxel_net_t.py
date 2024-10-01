@@ -4,7 +4,7 @@ import torchvision.models as models
 import logging
 
 # Configure logging
-logging.basicConfig(level=logging.info, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.debug, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class voxelNet(nn.Module):
     def __init__(self, cfg):
@@ -33,7 +33,7 @@ class voxelNet(nn.Module):
 
     def forward(self, x):
         batch_size, num_views, _, _, _ = x.shape
-        #logging.info(f"Input shape: {x.shape}")
+        logging.debug(f"Input shape: {x.shape}")
 
         view_features = []
         
@@ -41,40 +41,40 @@ class voxelNet(nn.Module):
         for v in range(num_views):
             view = x[:, v]  # Extract view from batch
             feature_map = self.feature_extractor(view)  # Apply feature extraction
-            #logging.info(f"After feature extraction - View {v}: {feature_map.shape}")
+            logging.debug(f"After feature extraction - View {v}: {feature_map.shape}")
 
             feature_map = self.feature_map_to_embedding(feature_map)  # Project features to embedding space
-            #logging.info(f"After projection to embedding - View {v}: {feature_map.shape}")
+            logging.debug(f"After projection to embedding - View {v}: {feature_map.shape}")
 
             flattened_feature = feature_map.view(batch_size, -1)  # Flatten and store
             view_features.append(flattened_feature)
-            #logging.info(f"After flattening - View {v}: {flattened_feature.shape}")
+            logging.debug(f"After flattening - View {v}: {flattened_feature.shape}")
 
         # Stack all view features into a tensor of shape [batch_size, num_views, embedding_dim]
         view_features = torch.stack(view_features, dim=1)
-        #logging.info(f"Stacked view features shape: {view_features.shape}")
+        logging.debug(f"Stacked view features shape: {view_features.shape}")
 
         # Apply first attention (across embedding dimensions)
         attn_output, attn_weights = self.attention1(view_features, view_features, view_features)
-        #logging.info(f"First attention output shape: {attn_output.shape}")
-        #logging.info(f"First attention weights shape: {attn_weights.shape}")
+        logging.debug(f"First attention output shape: {attn_output.shape}")
+        logging.debug(f"First attention weights shape: {attn_weights.shape}")
 
         # Transpose the output to switch view and embedding dimensions
         attn_output = attn_output.transpose(1, 2)  # Shape becomes [batch_size, embedding_dim, num_views]
-        #logging.info(f"After transposing: {attn_output.shape}")
+        logging.debug(f"After transposing: {attn_output.shape}")
 
         # Apply second attention (across views)
         attn_output, attn_weights = self.attention2(attn_output, attn_output, attn_output)
-        #logging.info(f"Second attention output shape: {attn_output.shape}")
-        #logging.info(f"Second attention weights shape: {attn_weights.shape}")
+        logging.debug(f"Second attention output shape: {attn_output.shape}")
+        logging.debug(f"Second attention weights shape: {attn_weights.shape}")
 
         # Flatten the output for the fully connected layer
         attn_output = attn_output.reshape(batch_size, -1)
-        #logging.info(f"Flattened attention output shape: {attn_output.shape}")
+        logging.debug(f"Flattened attention output shape: {attn_output.shape}")
         
         # Decode to a 3D voxel grid
         output_3D = self.fc_decoder(attn_output)
         output_3D = output_3D.view(-1, *self.output_shape)  # Reshape to the target 3D shape
-        #logging.info(f"Final 3D output shape: {output_3D.shape}")
+        logging.debug(f"Final 3D output shape: {output_3D.shape}")
         
         return output_3D, attn_weights

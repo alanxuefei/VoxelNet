@@ -50,21 +50,9 @@ __C.TRAIN.CONTRAST = .4
 __C.TRAIN.SATURATION = .4
 __C.TRAIN.NOISE_STD = .1
 __C.TRAIN.RANDOM_BG_COLOR_RANGE = [[225, 255], [225, 255], [225, 255]]
-__C.TRAIN.LEARNING_RATE = 1e-10
 
-
-__C.TRAIN.LR_SCHEDULER = 'MilestonesLR'  # 'ExponentialLR' or 'MilestonesLR'
-__C.TRAIN.WARMUP = 0
-# for ExponentialLR
-__C.TRAIN.EXPONENTIALLR = edict()
-__C.TRAIN.EXPONENTIALLR.SCHEDULE_FACTOR = 1
-# for MilestonesLR
-__C.TRAIN.MILESTONESLR = edict()
-__C.TRAIN.MILESTONESLR.LR_MILESTONES = [100, 130, 150, 200]
-__C.TRAIN.MILESTONESLR.GAMMA = .1
 __C.TRAIN.BETAS = (.9, .999)
-__C.TRAIN.SAVE_FREQ = 30  # weights will be overwritten every save_freq epoch
-__C.TRAIN.SHOW_TRAIN_STATE = 500
+__C.TRAIN.SAVE_FREQ = 10  # weights will be overwritten every save_freq epoch
 __C.TRAIN.LOSS = 2  # 1 for 'bce'; 2 for 'dice'; 3 for 'ce_dice'; 4 for 'focal'
 __C.TRAIN.TEST_AFTER_TRAIN = True
 

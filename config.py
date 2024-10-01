@@ -6,7 +6,6 @@ cfg = __C
 # Dataset Config
 __C.DATASETS = edict()
 __C.DATASETS.SHAPENET = edict()
-# __C.DATASETS.SHAPENET.TAXONOMY_FILE_PATH = './datasets/ShapeNet_lamp.json'
 __C.DATASETS.SHAPENET.TAXONOMY_FILE_PATH = './datasets/ShapeNet.json'
 __C.DATASETS.SHAPENET.RENDERING_PATH = './datasets/ShapeNetRendering/%s/%s/rendering/%02d.png'
 __C.DATASETS.SHAPENET.VOXEL_PATH = './datasets/ShapeNetVox32/%s/%s/model.binvox'
@@ -26,7 +25,6 @@ __C.CONST.CROP_IMG_H = 128  # Dummy property for Pascal 3D
 __C.CONST.BATCH_SIZE_PER_GPU = 16
 __C.CONST.N_VIEWS_RENDERING = 3
 __C.CONST.NUM_WORKER = 20  # number of data workers
-__C.CONST.WEIGHTS = ''
 
 # Directories
 __C.DIR = edict()
@@ -51,8 +49,7 @@ __C.TRAIN.RANDOM_BG_COLOR_RANGE = [[225, 255], [225, 255], [225, 255]]
 __C.TRAIN.LEARNING_RATE = 1e-4
 
 __C.TRAIN.BETAS = (.9, .999)
-__C.TRAIN.SAVE_FREQ = 5  # weights will be overwritten every save_freq epoch
-__C.TRAIN.SHOW_TRAIN_STATE = 500
+__C.TRAIN.SAVE_FREQ = 30  # weights will be overwritten every save_freq epoch
 __C.TRAIN.LOSS = 2  # 1 for 'bce'; 2 for 'dice'; 3 for 'ce_dice'; 4 for 'focal'
 __C.TRAIN.TEST_AFTER_TRAIN = False
 
@@ -70,9 +67,9 @@ __C.REFINER.TCONV_USE_BIAS = False  # Whether to use bias in the transposed conv
 __C.REFINER.N_VOX = 32
 
 # Add checkpoint file path to the configuration
-__C.CHECKPOINT_MODEL_FILE = '/workspace/output_axis_attention_3_views/checkpoint-epoch-419-views3-embed3072-heads8-iou0_8341.pth'
-__C.CHECKPOINT_REFINER_FILE = '/workspace/output_axis_attention_3_views/checkpoint-epoch-419-views3-embed3072-heads8-iou0_8341.pth'
-# __C.CHECKPOINT_FILE = '/workspace/output_channel/checkpoint-epoch-090.pth'
+__C.CHECKPOINT_MODEL_FILE = '/workspace/output_axis_attention_3_views/checkpoint-epoch-000-views3-embed3072-heads8-iou0_8647-model_loss0_5384-refiner_loss0_5310.pth'
+__C.CHECKPOINT_REFINER_FILE = '/workspace/output_axis_attention_3_views/checkpoint-epoch-000-views3-embed3072-heads8-iou0_8647-model_loss0_5384-refiner_loss0_5310.pth'
+
 __C.RESUME_TRAIN = True
 __C.USE_REFINER = False  # Indicate whether to train the refiner
 
