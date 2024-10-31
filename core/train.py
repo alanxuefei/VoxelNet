@@ -11,12 +11,14 @@ import utils.helpers
 import utils.logging
 
 import core.pipeline_train as pipeline
+import core.model_util as model_util
 from core.test import test_net, test_net_fscore
 
 from models.voxel_net.voxel_net_t import voxelNet
-from models.voxel_net.refiner import Refiner, DummyRefiner
+from models.voxel_net.refiner import Refiner
 from losses.losses import get_loss_function
 from utils.average_meter import AverageMeter
+import core.model_util as model_util
 
 def train_model(cfg, model, refiner, train_data_loader, model_optimizer, loss_function_model, epoch_idx):
     """Train the model for one epoch, computing both model and refiner losses."""
@@ -38,7 +40,15 @@ def train_model(cfg, model, refiner, train_data_loader, model_optimizer, loss_fu
     n_batches = len(train_data_loader)
 
     for batch_idx, (taxonomy_names, sample_names, rendering_images, ground_truth_volumes) in enumerate(train_data_loader):
-        rendering_images = rendering_images[:, :n_views_rendering, ...]
+
+        # Log shape of rendering_images before slicing
+        # utils.logging.info(f"Shape of rendering_images before slicing: {rendering_images.shape}")
+        
+        # Load the last n_views_rendering from rendering_images
+        rendering_images = rendering_images[:, -n_views_rendering:, ...]
+        
+        # Log shape of rendering_images after slicing
+        # utils.logging.info(f"Shape of rendering_images after slicing (last {n_views_rendering} views): {rendering_images.shape}")
         data_time.update(time.time() - batch_end_time)
         
         rendering_images = utils.helpers.var_or_cuda(rendering_images)
@@ -79,14 +89,14 @@ def train_model(cfg, model, refiner, train_data_loader, model_optimizer, loss_fu
     # Optionally, you can return both average losses
     return model_losses.avg, refiner_losses.avg
 
-def train_refiner(cfg, model, refiner, train_data_loader, refiner_optimizer, loss_function_refiner, epoch_idx):
-    """Train the refiner for one epoch, computing both model and refiner losses."""
-    model.eval()
+def train_refiner(cfg, model, refiner, train_data_loader, model_optimizer, refiner_optimizer, loss_function_refiner, epoch_idx):
+    """Train the refiner and model for one epoch, computing both model and refiner losses."""
+    model.train()
     refiner.train()
 
-    # Freeze model parameters
+    # Unfreeze model parameters
     for param in model.parameters():
-        param.requires_grad = False
+        param.requires_grad = True
     # Unfreeze refiner parameters
     for param in refiner.parameters():
         param.requires_grad = True
@@ -108,12 +118,16 @@ def train_refiner(cfg, model, refiner, train_data_loader, refiner_optimizer, los
         rendering_images = utils.helpers.var_or_cuda(rendering_images)
         ground_truth_volumes = utils.helpers.var_or_cuda(ground_truth_volumes)
 
-        # Forward pass through the model (without gradients)
-        with torch.no_grad():
-            output_3D, _ = model(rendering_images)
-            # Compute model loss
-            model_loss = loss_function_refiner(output_3D, ground_truth_volumes)
-            model_losses.update(model_loss.item())
+        # Forward pass through the model
+        output_3D, _ = model(rendering_images)
+        # Compute model loss
+        model_loss = loss_function_refiner(output_3D, ground_truth_volumes)
+        model_losses.update(model_loss.item())
+
+        # Backward pass and optimization for the model
+        model_optimizer.zero_grad()
+        model_loss.backward()
+        model_optimizer.step()
 
         # Forward pass through the refiner
         refined_output_3D = refiner(output_3D.detach())
@@ -121,7 +135,7 @@ def train_refiner(cfg, model, refiner, train_data_loader, refiner_optimizer, los
         # Compute refiner loss
         refiner_loss = loss_function_refiner(refined_output_3D, ground_truth_volumes)
 
-        # Backward pass and optimization
+        # Backward pass and optimization for the refiner
         refiner_optimizer.zero_grad()
         refiner_loss.backward()
         refiner_optimizer.step()
@@ -133,7 +147,7 @@ def train_refiner(cfg, model, refiner, train_data_loader, refiner_optimizer, los
         batch_end_time = time.time()
 
         # Logging
-        if batch_idx == 0 or (batch_idx + 1) % cfg.TRAIN.SHOW_TRAIN_STATE == 0:
+        if batch_idx == 0 or (batch_idx + 1) % 50 == 0:
             utils.logging.info(
                 f"[Epoch {epoch_idx + 1}/{cfg.TRAIN.NUM_EPOCHS}]"
                 f"[Batch {batch_idx + 1}/{n_batches}] "
@@ -161,8 +175,8 @@ def train_net(cfg):
     refiner = Refiner(cfg)
 
     # Initialize training parameters
-    init_epoch, model, cfg = pipeline.setup_network(cfg, model)
-    init_epoch, refiner, cfg = pipeline.setup_refiner(cfg, refiner)
+    init_epoch, model, cfg = model_util.setup_network(cfg, model)
+    init_epoch, refiner, cfg = model_util.setup_refiner(cfg, refiner)
 
     test_net(cfg, model, refiner)
 
@@ -172,8 +186,8 @@ def train_net(cfg):
 
     if cfg.USE_REFINER:
         # Only train the refiner
-        refiner_optimizer = torch.optim.Adam(refiner.parameters(), lr=0.0001)
-        model_optimizer = None
+        refiner_optimizer = torch.optim.Adam(refiner.parameters(), lr=0.00001)
+        model_optimizer = torch.optim.Adam(model.parameters(), lr=0.00001)
     else:
         # Only train the model
         model_optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
@@ -186,7 +200,7 @@ def train_net(cfg):
         if cfg.USE_REFINER:
             # Train refiner and get both average losses
             avg_model_loss, avg_refiner_loss = train_refiner(
-                cfg, model, refiner, train_data_loader, refiner_optimizer,
+                cfg, model, refiner, train_data_loader, model_optimizer, refiner_optimizer,
                 loss_function_refiner, epoch_idx
             )
         else:
@@ -204,10 +218,9 @@ def train_net(cfg):
         )
 
         # Save weights if necessary
-        if (epoch_idx % cfg.TRAIN.SAVE_FREQ == 0 or
-            avg_model_loss < best_model_loss or avg_refiner_loss < best_refiner_loss):
-            iou = test_net(cfg, epoch_idx + 1, None, None, model, refiner)
-            pipeline.save_checkpoint(cfg, epoch_idx, iou, model, refiner, avg_model_loss, avg_refiner_loss)
+        if (epoch_idx % 10 == 0):
+            iou = test_net(cfg, model, refiner)
+            model_util.save_checkpoint(cfg, epoch_idx, iou, model, refiner, avg_model_loss, avg_refiner_loss)
 
             if cfg.TEST.RUN_FSCORE:
                 utils.logging.info("Running test_net_fscore...")

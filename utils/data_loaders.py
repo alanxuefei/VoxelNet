@@ -123,30 +123,70 @@ class ShapeNetDataLoader:
             return None
 
     def get_dataset(self, dataset_type, n_views_rendering, transforms=None, cache_file='shapenet_files.pkl'):
+        """
+        Retrieves the ShapeNet dataset for the specified dataset type, storing all train, test, and val files into 'files'.
+        The files are accessible via files[DatasetType.TRAIN], files[DatasetType.TEST], files[DatasetType.VAL].
+
+        Args:
+            dataset_type (DatasetType): The type of dataset to retrieve (e.g., DatasetType.TRAIN, DatasetType.TEST, DatasetType.VAL).
+            n_views_rendering (int): Number of views for rendering.
+            transforms (callable, optional): Optional transformations to apply to the dataset.
+            cache_file (str, optional): Path to the cache file. Defaults to 'shapenet_files.pkl'.
+
+        Returns:
+            tuple: A tuple containing the ShapeNetDataset instance and the number of files.
+        """
+        # Load cached files from disk
         files = self.load_files_from_disk(cache_file)
 
+        # Initialize the files dictionary if cache is empty
         if files is None:
-            files = []
+            files = {}
+            logging.info('Cache is empty. Initializing new cache.')
 
-            # Load data for each category
+            # Initialize entries for each dataset type
+            files[DatasetType.TRAIN] = []
+            files[DatasetType.TEST] = []
+            files[DatasetType.VAL] = []
+
+            # Load data for each taxonomy and dataset type
             for taxonomy in self.dataset_taxonomy:
-                taxonomy_folder_name = taxonomy['taxonomy_id']
-                logging.info('Collecting files of Taxonomy[ID=%s, Name=%s]' %
-                             (taxonomy['taxonomy_id'], taxonomy['taxonomy_name']))
-                samples = []
-                if dataset_type == DatasetType.TRAIN:
-                    samples = taxonomy['train']
-                elif dataset_type == DatasetType.TEST:
-                    samples = taxonomy['test']
-                elif dataset_type == DatasetType.VAL:
-                    samples = taxonomy['val']
+                taxonomy_id = taxonomy['taxonomy_id']
+                taxonomy_name = taxonomy['taxonomy_name']
+                logging.info('Collecting files for Taxonomy[ID=%s, Name=%s]' %
+                            (taxonomy_id, taxonomy_name))
 
-                files.extend(self.get_files_of_taxonomy(taxonomy_folder_name, samples))
+                # Collect files for each dataset type
+                for dt in [DatasetType.TRAIN, DatasetType.TEST, DatasetType.VAL]:
+                    # Get the sample list for the current dataset type
+                    samples = taxonomy.get(dt.name.lower(), [])
+                    if not samples:
+                        continue  # Skip if there are no samples for this dataset type
 
-            logging.info('Complete collecting files of the dataset. Total files: %d.' % (len(files)))
+                    logging.info('Collecting %d samples for DatasetType=%s' % (len(samples), dt.name))
+
+                    # Get files for the current taxonomy and dataset type
+                    taxonomy_files = self.get_files_of_taxonomy(taxonomy_id, samples)
+
+                    # Extend the files list for the current dataset type
+                    files[dt].extend(taxonomy_files)
+
+                    logging.info('Collected %d files for DatasetType=%s' % (len(taxonomy_files), dt.name))
+
+            # Save the updated files dictionary to disk
             self.save_files_to_disk(files, cache_file)
+            logging.info('Files collected and saved to cache.')
 
-        return ShapeNetDataset(dataset_type, files, n_views_rendering, transforms), len(files)
+        else:
+            logging.info('Using cached files.')
+
+        # Get files for the requested dataset_type
+        all_files = files.get(dataset_type, [])
+        logging.info('Total files collected for DatasetType=%s: %d.' % (dataset_type.name, len(all_files)))
+
+        # Return the dataset and the number of files
+        return ShapeNetDataset(dataset_type, all_files, n_views_rendering, transforms), len(all_files)
+
 
     def get_files_of_taxonomy(self, taxonomy_folder_name, samples):
         files_of_taxonomy = []

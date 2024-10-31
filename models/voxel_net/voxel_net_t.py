@@ -31,6 +31,8 @@ class voxelNet(nn.Module):
         self.fc_decoder = nn.Linear(self.embed_dim * self.num_views, 
                                     self.output_shape[0] * self.output_shape[1] * self.output_shape[2])
 
+        self.relu = nn.ReLU()
+
     def forward(self, x):
         batch_size, num_views, _, _, _ = x.shape
         logging.debug(f"Input shape: {x.shape}")
@@ -76,5 +78,6 @@ class voxelNet(nn.Module):
         output_3D = self.fc_decoder(attn_output)
         output_3D = output_3D.view(-1, *self.output_shape)  # Reshape to the target 3D shape
         logging.debug(f"Final 3D output shape: {output_3D.shape}")
+        output_3D = self.relu(output_3D)
         
         return output_3D, attn_weights
