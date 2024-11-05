@@ -8,12 +8,6 @@ import math
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def positionalencoding1d(d_model, length):
-    """
-    Generates a 1D positional encoding matrix.
-    :param d_model: dimension of the model (embedding dimension)
-    :param length: length of positions (number of views)
-    :return: A (length, d_model) position matrix
-    """
     if d_model % 2 != 0:
         raise ValueError("Cannot use sin/cos positional encoding with odd dimension (got dim={:d})".format(d_model))
     pe = torch.zeros(length, d_model)
@@ -22,6 +16,25 @@ def positionalencoding1d(d_model, length):
     pe[:, 0::2] = torch.sin(position.float() * div_term)
     pe[:, 1::2] = torch.cos(position.float() * div_term)
     return pe
+
+class DivergenceEnhancedMultiHeadAttention(nn.Module):
+    def __init__(self, embed_dim, num_heads):
+        super(DivergenceEnhancedMultiHeadAttention, self).__init__()
+        self.multihead_attn = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
+        # Linear layer to project concatenated features back to original dimension
+        self.projection = nn.Linear(embed_dim * 2, embed_dim)
+
+    def forward(self, x):
+        # Apply multi-head attention
+        attn_output, attn_weights = self.multihead_attn(x, x, x)
+        
+        # Concatenate original input and attention output to promote divergence
+        enhanced_output = torch.cat((x, attn_output), dim=-1)  # Concatenates along the embedding dimension
+        
+        # Project concatenated result back to the original embedding dimension
+        enhanced_output = self.projection(enhanced_output)
+        
+        return enhanced_output, attn_weights
 
 class VoxelNet(nn.Module):
     def __init__(self, cfg):
@@ -38,10 +51,11 @@ class VoxelNet(nn.Module):
         # Convert extracted features to embeddings
         self.feature_map_to_embedding = nn.Conv2d(regnet.fc.in_features, self.embed_dim, kernel_size=1)
 
-        # Multi-head attention for view combination
-        self.attention = nn.MultiheadAttention(self.embed_dim, num_heads=self.num_heads, batch_first=True)
-        self.intra_attention = nn.MultiheadAttention(int(self.embed_dim / 96), num_heads=self.num_heads, batch_first=True)
-        # Fully connected layer to decode the combined features
+        # Divergence-Enhanced Multi-head attention for view combination
+        self.attention = DivergenceEnhancedMultiHeadAttention(self.embed_dim, num_heads=self.num_heads)
+        self.attention1 = nn.MultiheadAttention(int(self.embed_dim / 96), num_heads=self.num_heads, batch_first=True)
+
+        # Fully connected layer for decoding
         self.fc_decoder = nn.Linear(self.embed_dim, self.output_shape[0] * self.output_shape[1] * self.output_shape[2])
 
     def forward(self, x):
@@ -52,53 +66,43 @@ class VoxelNet(nn.Module):
         view_features = []
         for v in range(num_views):
             view = x[:, v]
-            logging.debug(f"Processing view {v + 1}/{num_views}, view shape: {view.shape}")
             feature_map = self.feature_extractor(view)
-            logging.debug(f"Feature map shape after feature extractor: {feature_map.shape}")
             feature_map = self.feature_map_to_embedding(feature_map)
-            logging.debug(f"Feature map shape after embedding: {feature_map.shape}")
+            feature_map = feature_map.view(batch_size, -1)  # Flatten
 
-            # Flatten and split the feature map into smaller chunks (patches)
-            feature_map = feature_map.view(batch_size, -1)  # Shape: (batch_size, embed_dim)
-            num_patches = self.num_patches
-            split_dim = self.embed_dim // num_patches
-            split_features = torch.split(feature_map, split_dim, dim=1)  # Split embeddings into smaller patches
+            # num_patches = self.num_patches
+            # split_dim = self.embed_dim // num_patches
+            # split_features = torch.split(feature_map, split_dim, dim=1)
 
-            # Generate positional encoding for the patches within the view
-            patch_positional_encoding = positionalencoding1d(split_dim, len(split_features)).to(x.device)
+            # patch_positional_encoding = positionalencoding1d(split_dim, len(split_features)).to(x.device)
+            # encoded_splits = [split + patch_positional_encoding[i] for i, split in enumerate(split_features)]
+            # encoded_splits_stack = torch.stack(encoded_splits, dim=1)
+            # intra_view_attn, _ = self.attention1(encoded_splits_stack, encoded_splits_stack, encoded_splits_stack)
+            # encoded_splits = [intra_view_attn[:, i, :] for i in range(num_patches)]
 
-            # Apply positional encoding to each split patch
-            encoded_splits = []
-            for i, split in enumerate(split_features):
-                encoded_split = split + patch_positional_encoding[i]
-                encoded_splits.append(encoded_split)
-
-            # Apply intra-view attention on the encoded splits
-            encoded_splits_stack = torch.stack(encoded_splits, dim=1)  # Shape: (batch_size, num_patches, split_dim)
-            intra_view_attn, _ = self.intra_attention(encoded_splits_stack, encoded_splits_stack, encoded_splits_stack)
-            encoded_splits = [intra_view_attn[:, i, :] for i in range(num_patches)]
-
-            # Concatenate the encoded splits back to original embedding dimension
-            restored_feature_map = torch.cat(encoded_splits, dim=1)
-            view_features.append(restored_feature_map)
+            # restored_feature_map = torch.cat(feature_map, dim=1)
+            view_features.append(feature_map)
 
         # Stack features from different views
         view_features = torch.stack(view_features, dim=1)  # Shape: (batch_size, num_views, embed_dim)
         logging.debug(f"Stacked view features shape before attention: {view_features.shape}")
 
-        # Apply multi-head attention across views
-        view_features_attn, attn_weights = self.attention(view_features, view_features, view_features)
-        logging.debug(f"Attention output shape: {view_features_attn.shape}")
+        # Apply divergence-enhanced attention across views
+        view_features_attn, attn_weights = self.attention(view_features)
+        logging.debug(f"Enhanced attention output shape: {view_features_attn.shape}")
         logging.debug(f"Attention weights shape: {attn_weights.shape}")
 
-        # Decode each view feature separately after attention and sum them up
+        # Decode each view feature separately after attention and average them
         decoded_outputs = []
         for v in range(num_views):
             decoded_view = self.fc_decoder(view_features_attn[:, v, :])  # Decode each view
-            decoded_outputs.append(decoded_view.view(-1, *self.output_shape))  # Reshape to output shape
+            decoded_outputs.append(decoded_view)  # Append decoded output for each view
 
-        # Sum the decoded outputs from each view
-        output_3D = torch.stack(decoded_outputs, dim=0).sum(dim=0)  # Sum across views
-        logging.debug(f"Final 3D output shape after summing decoded views: {output_3D.shape}")
+        # Stack along a new dimension for max operation
+        decoded_outputs_tensor = torch.stack(decoded_outputs, dim=1)  # Shape: (batch_size, num_views, output_dim)
+        output_3D, _ = torch.max(decoded_outputs_tensor, dim=1)  # Max over views, resulting in shape: (batch_size, output_dim)
 
-        return output_3D
+        output_3D = output_3D.view(batch_size, 32, 32, 32)
+        decoded_outputs = [output.view(batch_size, 32, 32, 32) for output in decoded_outputs]
+        decoded_outputs = torch.stack(decoded_outputs, dim=1) 
+        return output_3D, decoded_outputs
